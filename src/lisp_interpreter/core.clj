@@ -29,22 +29,24 @@
 ;              (= start "if") (let [[tst rst] (parser (rest remaining)) remain (seq (rest (rest (rest rst))))]
 ;                               (if tst [(first rst) remain] [(second rst) remain])))))))
 
+(defn resultify [result remaining] (if (empty? remaining) [result nil] [result remaining]))
 
 (defn parser [s]
-      (let [start (first s)]
+      (let [start (first s), remaining (rest s), f (functions start), atm (get-atom start)]
         (cond
           (= start ")") (throw-error)
-          (= start "(") (let [[func remain] (parser (rest s))]
-                          (loop [[fst & rst] remain, args []]
-                            (if (= fst ")")
-                              (reduce func args)
-                              ))))))
+          (= start "(") (let [[func remain] (parser remaining)]
+                          (loop [[fst & rst :as all] remain, args []]
+                            (cond
+                              (= fst ")") (resultify (reduce func args) rst)
+                              :else (let [[res left] (parser all)]
+                                      (recur left (conj args res))))))
+          (some? f) (resultify f remaining)
+          (some? atm) (resultify atm remaining))))
 
 
 (defn str-cleaner [s]
       (filter #(not (= % ""))
               (map trim (split (clojure.string/replace (clojure.string/replace s #"\(" " ( ") #"\)" " ) ") #" "))))
 
-(defn gen-parser [s] (parser s))
-
-(defn -main [s] (gen-parser (str-cleaner s)))
+(defn -main [s] (parser (str-cleaner s)))
