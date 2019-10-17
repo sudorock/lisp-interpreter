@@ -4,26 +4,36 @@
 
 (declare parser)
 
+(def variables (atom {}))
+(def functions {"+" +, "-" -, "*" *, "/" /, ">" >, "<" <, ">=" >=, "abs" #(max % (- %))})
+
 (defn throw-error [] "Error")
-
-(def functions {"+" +, "-" -, "*" *, "/" /, ">" >, "<" <, ">=" >=})
-
-(def var-ref {"k" 10})
+(defn resultify [result remaining] (if (empty? remaining) [result nil] [result remaining]))
 
 (defn get-atom [el]
       (try
         (Integer/parseInt el)
         (catch Exception e (try
                              (Double/parseDouble el)
-                             (catch Exception e (get var-ref el))))))
+                             (catch Exception e (get @variables el))))))
 
-(defn resultify [result remaining] (if (empty? remaining) [result nil] [result remaining]))
-
-(defn get-if-result [aft-if]
+(defn handle-if [aft-if]
       (let [[tst aft-tst] (parser aft-if), [then aft-then] (parser aft-tst),
             [else aft-else] (parser aft-then), remain (rest aft-else)]
         (if (not (= (first aft-else) ")"))
-          (throw-error) (if tst (resultify then remain) (resultify else remain)))))
+          (throw-error)
+          (if tst (resultify then remain) (resultify else remain)))))
+
+(defn handle-define [aft-def]
+      (let [var-name (first aft-def) var-val (second aft-def) remain (rest (rest aft-def))]
+        (if (not (= (first remain) ")"))
+          (throw-error)
+          (swap! variables assoc var-name (get-atom var-val)))))
+
+(defn special-form [s]
+      (condp = (first s)
+        "if" (handle-if (rest s))
+        "define" (handle-define (rest s))))
 
 (defn parser [s]
       (let [start (first s), remaining (rest s), f (functions start), atm (get-atom start)]
@@ -36,8 +46,7 @@
                               (= fst ")") (resultify (reduce func args) rst)
                               :else (let [[res remain] (parser all)]
                                       (recur remain (conj args res)))))
-                          (cond
-                            (= (first remaining) "if") (get-if-result (rest remaining))))
+                          (special-form remaining))
           (some? f) (resultify f remaining)
           (some? atm) (resultify atm remaining)
           :else nil)))
