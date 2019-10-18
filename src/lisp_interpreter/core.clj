@@ -1,14 +1,18 @@
 (ns lisp-interpreter.core)
-
 (refer 'clojure.string :only '[split trim])
 
 (declare parser)
 
 (def variables (atom {}))
-(def functions {"+" +, "-" -, "*" *, "/" /, ">" >, "<" <, ">=" >=, "abs" #(max % (- %))})
+(def functions {"+" +, "-" -, "*" *, "/" /, ">" >, "<" <, ">=" >=, "abs" #(max % (- %)), "max" max, "min" min,
+                "=" =, "not" not, "sqrt" #(Math/sqrt %)})
+(def constants {"true" true, "false" false, "null" nil})
 
 (defn throw-error [] "Error")
 (defn resultify [result remaining] (if (empty? remaining) [result nil] [result remaining]))
+(defn str-cleaner [s]
+      (filter #(not (= % ""))
+              (map trim (split (clojure.string/replace (clojure.string/replace s #"\(" " ( ") #"\)" " ) ") #" "))))
 
 (defn get-atom [el]
       (try
@@ -25,35 +29,50 @@
           (if tst (resultify then remain) (resultify else remain)))))
 
 (defn handle-define [aft-def]
-      (let [var-name (first aft-def) var-val (second aft-def) remain (rest (rest aft-def))]
+      (let [var-name (first aft-def), var-val (second aft-def), remain (rest (rest aft-def))]
         (if (not (= (first remain) ")"))
           (throw-error)
           (swap! variables assoc var-name (get-atom var-val)))))
 
+(defn handle-quote
+      ([aft-quot] (cond
+                   (= (first aft-quot) "(") (loop [[fst & rst] (rest aft-quot), result "(", cnt 1]
+                                             (cond
+                                               (zero? cnt) (handle-quote (read-string result) rst)
+                                               (= fst "(") (recur rst (str result \space fst \space) (inc cnt))
+                                               (= fst ")") (recur rst (str result \space fst \space) (dec cnt))
+                                               :else (recur rst (str result \space fst \space) cnt)))
+                   :else (handle-quote (read-string (first aft-quot)) (rest aft-quot))))
+      ([result remain] (if (or (= "(" (first remain)) (nil? remain)) result (throw-error))))
+
+(defn handle-set [aft-set]
+      (let [var-name (first aft-set), [var-val remain] (parser (rest aft-set))]
+        (if (not (= (first remain) ")"))
+          (throw-error)
+          (swap! variables assoc var-name var-val))))
+
 (defn special-form [s]
       (condp = (first s)
         "if" (handle-if (rest s))
-        "define" (handle-define (rest s))))
+        "define" (handle-define (rest s))
+        "set!" (handle-set (rest s))
+        "quote" (handle-quote (rest s))))
 
 (defn parser [s]
-      (let [start (first s), remaining (rest s), f (functions start), atm (get-atom start)]
+      (let [start (first s), remaining (rest s), f (functions start), atm (get-atom start), const (constants start)]
         (cond
           (= start ")") (throw-error)
           (= start "(") (if-let [[func remain] (parser remaining)]
                           (loop [[fst & rst :as all] remain, args []]
                             (cond
                               (nil? fst) (throw-error)
-                              (= fst ")") (resultify (reduce func args) rst)
+                              (= fst ")") (resultify (apply func args) rst)
                               :else (let [[res remain] (parser all)]
                                       (recur remain (conj args res)))))
                           (special-form remaining))
           (some? f) (resultify f remaining)
           (some? atm) (resultify atm remaining)
+          (some? const) (resultify const remaining)
           :else nil)))
-
-
-(defn str-cleaner [s]
-      (filter #(not (= % ""))
-              (map trim (split (clojure.string/replace (clojure.string/replace s #"\(" " ( ") #"\)" " ) ") #" "))))
 
 (defn -main [s] (parser (str-cleaner s)))
