@@ -2,8 +2,10 @@
 (refer 'clojure.string :only '[split trim replace-first join escape])
 (declare parse evaluate)
 (defn throw-error [] (throw (Exception. "Parse Error")))
-(def const {"+" #(apply + %), "-" #(apply - %), "*" #(apply * %), "/" /, ">" #(apply > %), "<" <, ">=" >=, "abs" #(max % (- %)), "max" max, "min" min,
-            "=" =, "not" not, "sqrt" #(Math/sqrt %), "true" true, "false" false})
+(defn uuid [] (str (java.util.UUID/randomUUID)))
+(def const {"+" #(apply + %), "-" #(apply - %), "*" #(apply * %), "/" #(apply / %), ">" #(apply > %), "<" #(apply < %),
+            ">=" #(apply >= %), "abs" (fn [a] (apply #(max % (- %)) a)), "max" #(apply max %), "min" #(apply min %),
+            "=" #(apply = %), "not" #(apply not %), "sqrt" (fn [a] (apply #(Math/sqrt %) a)), "true" true, "false" false})
 
 (def env (atom {}))
 
@@ -16,8 +18,11 @@
 (defn handle-lambda [form]
   (fn [args]
     (let [zip (zipmap (form 1) args)]
-      (println args zip)
-      (when (some? args) (evaluate (mapv #(if (zip %) (zip %) %) (form 2)))))))
+      (evaluate (mapv #(if (zip %) (zip %) %) (form 2))))))
+
+
+;(defn handle-lambda [form]
+;  (println form))
 
 (defn evaluate [form]
   (cond
@@ -25,30 +30,10 @@
     (string? form) (@env form)
     (= (form 0) "define") (swap! env assoc (form 1) (evaluate (form 2)))
     (= (form 0) "if") (if (evaluate (form 1)) (evaluate (form 2)) (evaluate (form 3)))
-    (= (form 0) "lambda") (println "hello")
+    (= (form 0) "lambda") (handle-lambda form)
     (fn? (@env (form 0))) ((@env (form 0)) (map evaluate (subvec form 1)))
     :else ((form 0) (map evaluate (subvec form 1)))))
 
-;(defn parse-lambda [s exp]
-;  (cond
-;    (re-find #"^\)" s) (throw-error)
-;    (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
-;                         (cond
-;                           (empty? rst) (throw-error)
-;                           (re-find #"^\)" rst) [exp (trim (replace-first rst #"^\)" ""))]
-;                           :else (when-let [[res rmn] (parse-lambda rst exp)] (recur (trim rmn) (conj exp res)))))
-;    :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
-
-(defn parse [s]
-  (cond
-    (re-find #"^\)" s) (throw-error)
-    (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
-                         (cond
-                           (empty? rst) (throw-error)
-                           ;(re-find #"^lambda\s+" rst) (parse-lambda rst 1)
-                           (re-find #"^\)" rst) [(evaluate exp) (trim (replace-first rst #"^\)" ""))]
-                           :else (when-let [[res rmn] (parse rst)] (recur (trim rmn) (conj exp res)))))
-    :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 (defn parse-only [s]
   (cond
@@ -58,6 +43,18 @@
                            (empty? rst) (throw-error)
                            (re-find #"^\)" rst) [exp (trim (replace-first rst #"^\)" ""))]
                            :else (when-let [[res rmn] (parse-only rst)] (recur (trim rmn) (conj exp res)))))
+    :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
+
+(defn parse [s]
+  (cond
+    (re-find #"^\)" s) (throw-error)
+    (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
+                         (println exp)
+                         (cond
+                           (empty? rst) (throw-error)
+                           (re-find #"^lambda\s+" rst) (let [[lexp rmn] (parse-only (str "(" rst))] [lexp (trim rmn)])
+                           (re-find #"^\)" rst) [(evaluate exp) (trim (replace-first rst #"^\)" ""))]
+                           :else (when-let [[res rmn] (parse rst)] (recur (trim rmn) (conj exp res)))))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 
@@ -72,7 +69,15 @@
 
 
 
-
+;(defn parse-lambda [s sexp]
+;  (cond
+;    (re-find #"^\)" s) [sexp s]
+;    (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
+;                         (cond
+;                           (empty? rst) (throw-error)
+;                           (re-find #"^\)" rst) [exp (trim (replace-first rst #"^\)" ""))]
+;                           :else (when-let [[res rmn] (parse-lambda rst exp)] (recur (trim rmn) (conj exp res)))))
+;    :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 
 
