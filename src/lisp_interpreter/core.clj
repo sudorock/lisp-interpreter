@@ -3,11 +3,17 @@
 (declare parse evaluate)
 (defn throw-error [] (throw (Exception. "Parse Error")))
 (defn uuid [] (str (java.util.UUID/randomUUID)))
-(def const {"+" #(apply + %), "-" #(apply - %), "*" #(apply * %), "/" #(apply / %), ">" #(apply > %), "<" #(apply < %),
-            ">=" #(apply >= %), "abs" (fn [a] (apply #(max % (- %)) a)), "max" #(apply max %), "min" #(apply min %),
-            "=" #(apply = %), "not" #(apply not %), "sqrt" (fn [a] (apply #(Math/sqrt %) a)), "true" true, "false" false})
+(def const {"+"  #(apply + %), "-" #(apply - %), "*" #(apply * %), "/" #(apply / %), ">" #(apply > %), "<" #(apply < %),
+            ">=" #(apply >= %), "<=" #(apply <= %), "="  #(apply = %),  "not" #(apply not %), "abs" (fn [a] (apply #(max % (- %)) a)),
+            "max" #(apply max %), "min" #(apply min %), "sqrt" (fn [a] (apply #(Math/sqrt %) a)), "true" true, "false" false})
 
-(def env (atom {}))
+(def envs (atom {:global {}}))
+
+(def parent (atom {}))
+
+(defn env-find [v env]
+  (when-let [cur (@envs env)]
+    (if-let [vl (cur v)] vl (env-find v (@parent env)))))
 
 (defn atomize [el]
   (try (Integer/parseInt el)
@@ -15,24 +21,23 @@
          (try (Double/parseDouble el)
               (catch Exception e (if-let [cnst (get const el)] cnst el))))))
 
-(defn handle-lambda [form]
+(defn handle-lambda [form env]
   (fn [args]
-    (let [zip (zipmap (form 1) args)]
-      (evaluate (mapv #(if (zip %) (zip %) %) (form 2))))))
+    (let [cur-env (uuid)]
+      (do
+        (swap! parent assoc cur-env env)
+        (swap! envs assoc cur-env (zipmap (form 1) args))
+        (evaluate (form 2) cur-env)))))
 
-
-;(defn handle-lambda [form]
-;  (println form))
-
-(defn evaluate [form]
+(defn evaluate [form env]
   (cond
     (or (boolean? form) (number? form)) form
-    (string? form) (@env form)
-    (= (form 0) "define") (swap! env assoc (form 1) (evaluate (form 2)))
-    (= (form 0) "if") (if (evaluate (form 1)) (evaluate (form 2)) (evaluate (form 3)))
-    (= (form 0) "lambda") (handle-lambda form)
-    (fn? (@env (form 0))) ((@env (form 0)) (map evaluate (subvec form 1)))
-    :else ((form 0) (map evaluate (subvec form 1)))))
+    (string? form) (env-find form env)
+    (= (form 0) "define") (swap! envs assoc-in [env (form 1)] (evaluate (form 2) env))
+    (= (form 0) "if") (if (evaluate (form 1) env) (evaluate (form 2) env) (evaluate (form 3) env))
+    (= (form 0) "lambda") (handle-lambda form env)
+    (fn? (env-find (form 0) env)) ((env-find (form 0) env) (map #(evaluate % env) (subvec form 1)))
+    :else ((form 0) (map #(evaluate % env) (subvec form 1)))))
 
 
 (defn parse-only [s]
@@ -45,140 +50,16 @@
                            :else (when-let [[res rmn] (parse-only rst)] (recur (trim rmn) (conj exp res)))))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
-(defn parse [s]
+(defn parse [s env]
   (cond
     (re-find #"^\)" s) (throw-error)
     (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
-                         (println exp)
                          (cond
                            (empty? rst) (throw-error)
                            (re-find #"^lambda\s+" rst) (let [[lexp rmn] (parse-only (str "(" rst))] [lexp (trim rmn)])
-                           (re-find #"^\)" rst) [(evaluate exp) (trim (replace-first rst #"^\)" ""))]
-                           :else (when-let [[res rmn] (parse rst)] (recur (trim rmn) (conj exp res)))))
+                           (re-find #"^\)" rst) [(evaluate exp env) (trim (replace-first rst #"^\)" ""))]
+                           :else (when-let [[res rmn] (parse rst env)] (recur (trim rmn) (conj exp res)))))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 
-(defn -main [s] (parse (trim s)))
-
-
-
-
-
-
-
-
-
-
-;(defn parse-lambda [s sexp]
-;  (cond
-;    (re-find #"^\)" s) [sexp s]
-;    (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
-;                         (cond
-;                           (empty? rst) (throw-error)
-;                           (re-find #"^\)" rst) [exp (trim (replace-first rst #"^\)" ""))]
-;                           :else (when-let [[res rmn] (parse-lambda rst exp)] (recur (trim rmn) (conj exp res)))))
-;    :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
-
-
-
-
-
-
-;
-;(def functions {"+" +, "-" -, "*" *, "/" /, ">" >, "<" <, ">=" >=, "abs" #(max % (- %)), "max" max, "min" min,
-;                "=" =, "not" not, "sqrt" #(Math/sqrt %)})
-;
-;
-;
-;
-;
-;
-;
-;(declare parser)
-;(def variables (atom {}))
-;(def constants {"true" true, "false" false, "null" nil})
-;
-;(defn throw-error [] "Error")
-;(defn str-cleaner [s]
-;  (filter #(not (= % ""))
-;          (map trim (split (clojure.string/replace (clojure.string/replace s #"\(" " ( ") #"\)" " ) ") #" "))))
-;
-;(defn get-atom [el]
-;  (try (Integer/parseInt el)
-;       (catch Exception e (try (Double/parseDouble el)
-;                               (catch Exception e (get @variables el))))))
-;
-;(defn handle-if [aft-if]
-;  (let [[tst aft-tst] (parser aft-if), [then aft-then] (parser aft-tst),
-;        [else aft-else] (parser aft-then), remain (rest aft-else)]
-;    (if (not (= (first aft-else) ")"))
-;      (throw-error)
-;      (if tst [then remain] [else remain]))))
-;
-;(defn handle-define [aft-def]
-;  (let [var-name (first aft-def), var-val (parser (rest aft-def)), remain (rest (rest aft-def))]
-;    (println var-val)
-;    (if (not (= (first remain) ")"))
-;      (throw-error)
-;      (swap! variables assoc var-name (get-atom var-val)))))
-;
-;(defn handle-quote
-;  ([aft-quot] (cond
-;                (= (first aft-quot) "(") (loop [[fst & rst] (rest aft-quot), result "(", cnt 1]
-;                                           (cond
-;                                             (zero? cnt) (handle-quote (read-string result) rst)
-;                                             (= fst "(") (recur rst (str result \space fst \space) (inc cnt))
-;                                             (= fst ")") (recur rst (str result \space fst \space) (dec cnt))
-;                                             :else (recur rst (str result \space fst \space) cnt)))
-;                :else (handle-quote (read-string (first aft-quot)) (rest aft-quot))))
-;  ([result remain] (if (or (= "(" (first remain)) (nil? remain)) result (throw-error))))
-;
-;(defn handle-set [aft-set]
-;  (let [var-name (first aft-set), [var-val remain] (parser (rest aft-set))]
-;    (if (not (= (first remain) ")"))
-;      (throw-error)
-;      (swap! variables assoc var-name var-val))))
-;
-;(defn handle-lambda [aft-lambda]
-;  (let [prefix "(quote (fn ", suffix (replace-first (replace-first (join " " aft-lambda) #"\(" "[") #"\)" "]"), exp (str prefix suffix ")")]
-;    [(eval (eval (read-string exp))) ()]))
-;
-;(defn special-form [s]
-;  (condp = (first s)
-;    "if" (handle-if (rest s))
-;    "define" (handle-define (rest s))
-;    "set!" (handle-set (rest s))
-;    "quote" (handle-quote (rest s))
-;    "lambda" (handle-lambda (rest s))))
-;
-;(defn parser [s]
-;  (let [start (first s), remaining (rest s), f (functions start), atm (get-atom start), const (constants start)]
-;    (println f atm)
-;    (cond
-;      (= start ")") (throw-error)
-;      (= start "(") (if-let [[func remain] (parser remaining)]
-;                      (loop [[fst & rst :as all] remain, args []]
-;                        (cond
-;                          (nil? fst) (throw-error)
-;                          (= fst ")") [(apply func args) rst]
-;                          :else (let [[res remain] (parser all)]
-;                                  (recur remain (conj args res)))))
-;                      (special-form remaining))
-;      (some? f)  [f remaining]
-;      (some? atm)  [atm remaining]
-;      (some? const) [const remaining]
-;      :else nil)))
-;
-;(defn -main [s] (parser (str-cleaner s)))
-
-
-;; tokenize the expression on the fly: look for ( and start expression vector, when you meet ) return expression vector
-;; evaluate returned expression vector
-;; eval: first check for special forms and if not found apply first arg func to the remaining args
-
-
-;(re-find #"\S+" s)
-
-;(?:(?:^\s*[\(\)])|(?:[[^\(\)]\S+]))
-
-;(?:^\s*[\(\)]|[[^\(\)]\S]+)
+(defn -main [s] (parse (trim s) :global))
