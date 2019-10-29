@@ -9,7 +9,7 @@
 (def const {"+" #(apply + %) "-" #(apply - %) "*" #(apply * %) "/" #(apply / %) ">" #(apply > %) "<" #(apply < %)
             ">=" #(apply >= %) "<=" #(apply <= %) "=" #(apply = %) "not" #(apply not %) "max" #(apply max %)
             "min" #(apply min %) "sqrt" (fn [a] (apply #(Math/sqrt %) a)) "expt" (fn [a] (apply #(Math/pow %1 %2) a))
-            "apply" #(apply %1 %&) "list" identity "round"   (fn [a] (apply #(Math/round %) a)) "abs" (fn [a] (apply #(max % (- %)) a))
+            "apply" #(apply %1 %&) "list" identity "round" (fn [a] (apply #(Math/round %) a)) "abs" (fn [a] (apply #(max % (- %)) a))
             "number?" #(apply number? %) "procedure?" #(apply fn? %) "symbol?" #(apply string? %) "equal?" #(apply = %)
             "car" #(apply first %) "cdr" #(apply next %) "cons" (fn [a] (apply #(cons %1 %2) a)) "pi" 3.141592653589793
             "map" (fn [[f & bdy]] (map f (map vector (first bdy)))) "true" true "false" false})
@@ -36,6 +36,7 @@
     (= (get exp 0) "if") (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) "quote") (exp 1)
     (= (get exp 0) "lambda") (handle-lambda exp env)
+    (= (get exp 0) "begin") (last (map #(evaluate % env) (subvec exp 1)))
     (fn? (env-find (get exp 0) env)) ((env-find (get exp 0) env) (map #(evaluate % env) (subvec exp 1)))
     (fn? (get exp 0)) ((get exp 0) (map #(evaluate % env) (subvec exp 1)))
     :else (if (coll? exp) exp (throw-error))))
