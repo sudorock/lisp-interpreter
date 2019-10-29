@@ -1,6 +1,6 @@
-(ns lisp-interpreter.core
-  (:require [clojure.string :refer [split trim replace-first join escape]]))
+(ns lisp-interpreter.core (:require [clojure.string :refer [split trim replace-first join escape]]))
 (declare evaluate)
+
 (defn throw-error [] (throw (Exception. "Parse Error")))
 (defn uuid [] (str (java.util.UUID/randomUUID)))
 
@@ -17,16 +17,7 @@
 (defn env-find [sym env] (when-let [cur (@envs env)] (if-let [vl (cur sym)] vl (env-find sym (@parent env)))))
 
 (defn atomize [el]
-  (try (Integer/parseInt el)
-       (catch Exception e (try (Double/parseDouble el)
-                               (catch Exception e (if-let [cnst (get const el)] cnst el))))))
-
-(defn handle-lambda [exp env]
-  (fn [args]
-    (let [cur-env (uuid)]
-      (swap! parent assoc cur-env env)
-      (swap! envs assoc cur-env (zipmap (exp 1) args))
-      (evaluate (exp 2) cur-env))))
+  (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (if-let [cnst (get const el)] cnst el))))))
 
 (defn evaluate [exp env]
   (cond
@@ -35,8 +26,11 @@
     (some #(= (get exp 0) %) ["set!" "define"]) (swap! envs assoc-in [env (exp 1)] (evaluate (exp 2) env))
     (= (get exp 0) "if") (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) "quote") (exp 1)
-    (= (get exp 0) "lambda") (handle-lambda exp env)
     (= (get exp 0) "begin") (last (map #(evaluate % env) (subvec exp 1)))
+    (= (get exp 0) "lambda") (fn [args] (let [cur-env (uuid)]
+                                          (swap! parent assoc cur-env env)
+                                          (swap! envs assoc cur-env (zipmap (exp 1) args))
+                                          (evaluate (exp 2) cur-env)))
     (fn? (env-find (get exp 0) env)) ((env-find (get exp 0) env) (map #(evaluate % env) (subvec exp 1)))
     (fn? (get exp 0)) ((get exp 0) (map #(evaluate % env) (subvec exp 1)))
     :else (if (coll? exp) exp (throw-error))))
