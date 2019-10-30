@@ -4,7 +4,7 @@
 (defn throw-error [] (throw (Exception. "Parse Error")))
 (defn uuid [] (str (java.util.UUID/randomUUID)))
 
-(def envs (atom {:global {}}))
+(def envs (atom {:g {}}))
 (def parent (atom {}))
 (def const {"+" #(apply + %) "-" #(apply - %) "*" #(apply * %) "/" #(apply / %) ">" #(apply > %) "<" #(apply < %)
             ">=" #(apply >= %) "<=" #(apply <= %) "=" #(apply = %) "not" #(apply not %) "max" #(apply max %)
@@ -38,12 +38,16 @@
 (defn parse [s eval?]
   (cond
     (re-find #"^\)" s) (throw-error)
-    (and eval? (re-find #"^\(\s*(?:lambda|quote)\s+" s)) (let [[res rmn] (parse s false)] [(evaluate res :global) (trim rmn)])
+    (and eval? (re-find #"^\(\s*(?:lambda|quote)\s+" s)) (let [[res rmn] (parse s false)] [(evaluate res :g) (trim rmn)])
     (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
                          (cond
                            (empty? rst) (throw-error)
-                           (re-find #"^\)" rst) [(if eval? (evaluate exp :global) exp) (trim (replace-first rst #"^\)" ""))]
+                           (re-find #"^\)" rst) [(if eval? (evaluate exp :g) exp) (trim (replace-first rst #"^\)" ""))]
                            :else (when-let [[res rmn] (parse rst eval?)] (recur (trim rmn) (conj exp res)))))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
-(defn -main [s] (parse (trim s) true))
+(defn -main []
+  (do
+    (printf "cljisp> ") (flush)
+    (let [[res rmn] (parse (trim (read-line)) true)]
+      (if (empty? rmn) (do (printf "%s \n" res) (flush) (-main)) (throw-error)))))
