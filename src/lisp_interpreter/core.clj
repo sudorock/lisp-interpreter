@@ -23,7 +23,7 @@
   (cond
     ((some-fn number? boolean? fn?) exp) exp
     (string? exp) (env-find exp env)
-    (some #(= (get exp 0) %) ["set!" "define"]) (swap! envs assoc-in [env (exp 1)] (evaluate (exp 2) env))
+    (some #(= (get exp 0) %) ["set!" "define"]) (do (swap! envs assoc-in [env (exp 1)] (evaluate (exp 2) env)))
     (= (get exp 0) "if") (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) "quote") (exp 1)
     (= (get exp 0) "begin") (last (map #(evaluate % env) (subvec exp 1)))
@@ -47,7 +47,6 @@
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 (defn -main []
-  (do
-    (printf "cljisp> ") (flush)
-    (let [[res rmn] (parse (trim (read-line)) true)]
-      (if (empty? rmn) (do (printf "%s \n" res) (flush) (-main)) (throw-error)))))
+  (do (printf "\033[0;1mcljisp ~ \u03BB \033[31;1m") (flush)
+      (let [[res rmn] (parse (trim (read-line)) true)]
+      (if (empty? rmn) (do (printf "\033[31;1m%s\n" (pr-str res)) (-main)) (throw-error)))))
