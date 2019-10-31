@@ -9,10 +9,10 @@
 (def const {"+" #(apply + %) "-" #(apply - %) "*" #(apply * %) "/" #(apply / %) ">" #(apply > %) "<" #(apply < %)
             ">=" #(apply >= %) "<=" #(apply <= %) "=" #(apply = %) "not" #(apply not %) "max" #(apply max %)
             "min" #(apply min %) "sqrt" (fn [a] (apply #(Math/sqrt %) a)) "expt" (fn [a] (apply #(Math/pow %1 %2) a))
-            "apply" #(apply %1 %&) "list" identity "round" (fn [a] (apply #(Math/round %) a)) "abs" (fn [a] (apply #(max % (- %)) a))
+            "apply" #(apply %1 %&) "list" identity "round" (fn [a] (apply #(Math/round %) a)) "pi" 3.141592653589793
             "number?" #(apply number? %) "procedure?" #(apply fn? %) "symbol?" #(apply string? %) "equal?" #(apply = %)
-            "car" #(apply first %) "cdr" #(apply next %) "cons" (fn [a] (apply #(cons %1 %2) a)) "pi" 3.141592653589793
-            "map" (fn [[f & bdy]] (map f (map vector (first bdy)))) "true" true "false" false})
+            "car" #(apply first %) "cdr" #(apply next %) "cons" (fn [a] (apply #(cons %1 %2) a)) "true" true "false" false
+            "map" (fn [[f & bdy]] (map f (map vector (first bdy)))) "abs" (fn [a] (apply #(max % (- %)) a))})
 
 (defn env-find [sym env] (when-let [cur (@envs env)] (if-let [vl (cur sym)] vl (env-find sym (@parent env)))))
 
@@ -46,7 +46,11 @@
                            :else (when-let [[res rmn] (parse rst eval?)] (recur (trim rmn) (conj exp res)))))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
+;; REPL
+
 (defn -main []
   (do (printf "\033[0;1mcljisp ~ \u03BB \033[31;1m") (flush)
       (let [[res rmn] (parse (trim (read-line)) true)]
-      (if (empty? rmn) (do (printf "\033[31;1m%s\n" (pr-str res)) (-main)) (throw-error)))))
+        (if (empty? rmn) (do (printf "\033[31;1m%s\n" (pr-str res)) (-main)) (throw-error)))))
+
+(defn interpret [s] (parse (trim s) true))
