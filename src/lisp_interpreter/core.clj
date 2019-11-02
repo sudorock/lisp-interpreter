@@ -2,7 +2,6 @@
 (declare evaluate)
 
 (defn throw-error [] (throw (Exception. "Parse Error")))
-(defn uuid [] (str (java.util.UUID/randomUUID)))
 
 (def envs (atom {:g {}}))
 (def parent (atom {}))
@@ -17,7 +16,9 @@
 (defn env-find [sym env] (when-let [cur (@envs env)] (if-let [vl (cur sym)] vl (env-find sym (@parent env)))))
 
 (defn atomize [el]
-  (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (if-let [cnst (get const el)] cnst el))))))
+  (try (Integer/parseInt el)
+       (catch Exception e (try (Double/parseDouble el)
+                               (catch Exception e (if-let [cnst (get const el)] cnst el))))))
 
 (defn evaluate [exp env]
   (cond
@@ -27,7 +28,7 @@
     (= (get exp 0) "if") (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) "quote") (exp 1)
     (= (get exp 0) "begin") (last (map #(evaluate % env) (subvec exp 1)))
-    (= (get exp 0) "lambda") (fn [args] (let [cur-env (uuid)]
+    (= (get exp 0) "lambda") (fn [args] (let [cur-env (keyword (gensym))]
                                           (swap! parent assoc cur-env env)
                                           (swap! envs assoc cur-env (zipmap (exp 1) args))
                                           (evaluate (exp 2) cur-env)))
@@ -46,11 +47,10 @@
                            :else (when-let [[res rmn] (parse rst eval?)] (recur (trim rmn) (conj exp res)))))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
-;; REPL
-
-(defn -main []
-  (do (printf "\033[0;1mcljisp ~ \u03BB \033[31;1m") (flush)
-      (let [[res rmn] (parse (trim (read-line)) true)]
-        (if (empty? rmn) (do (printf "\033[31;1m%s\n" (pr-str res)) (-main)) (throw-error)))))
-
+;; Interpreter and REPL
 (defn interpret [s] (parse (trim s) true))
+(defn -main []
+  (do (printf "\033[0;1mcljisp ~ \u03BB  \033[34;1m") (flush)
+      (let [[res rmn] (interpret (read-line))]
+        (if (empty? rmn) (do (printf "%s\n" (pr-str res)) (-main)) (throw-error)))))
+
