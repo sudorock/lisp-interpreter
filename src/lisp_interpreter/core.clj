@@ -4,40 +4,41 @@
 
 (defn throw-error [] (throw (Exception. "Parse Error")))
 
-(def envs (atom {:g {'+               #(apply + %)
-                     '-               #(apply - %)
-                     '*               #(apply * %)
-                     '/               #(apply / %)
-                     '>               #(apply > %)
-                     '<               #(apply < %)
-                     '>=              #(apply >= %)
-                     '<=              #(apply <= %)
-                     '=               #(apply = %)
-                     'not             #(apply not %)
-                     'max             #(apply max %)
-                     'min             #(apply min %)
-                     'sqrt            (fn [a] (apply #(Math/sqrt %) a))
-                     'expt            (fn [a] (apply #(Math/pow %1 %2) a))
-                     'round           (fn [a] (apply #(Math/round %) a))
-                     'abs             (fn [a] (apply #(max % (- %)) a))
-                     'number?         #(apply number? %)
-                     'procedure?      #(apply fn? %)
-                     'symbol?         #(apply string? %)
-                     'equal?          #(apply = %)
-                     'list            identity
-                     'car             #(apply first %)
-                     'cdr             #(apply next %)
-                     'cons            (fn [a] (apply #(cons %1 %2) a))
-                     'apply           #(apply %1 %&)
-                     'map             (fn [[f & bdy]] (map f (map vector (first bdy))))
-                     'pi              3.141592653589793
-                     (symbol "true")  true
-                     (symbol "false") false}}))
-(def parent (atom {}))
+(def parent {})
+(def macros {})
+(def envs {:g {'+               #(apply + %)
+               '-               #(apply - %)
+               '*               #(apply * %)
+               '/               #(apply / %)
+               '>               #(apply > %)
+               '<               #(apply < %)
+               '>=              #(apply >= %)
+               '<=              #(apply <= %)
+               '=               #(apply = %)
+               'not             #(apply not %)
+               'max             #(apply max %)
+               'min             #(apply min %)
+               'sqrt            (fn [a] (apply #(Math/sqrt %) a))
+               'expt            (fn [a] (apply #(Math/pow %1 %2) a))
+               'round           (fn [a] (apply #(Math/round %) a))
+               'abs             (fn [a] (apply #(max % (- %)) a))
+               'number?         #(apply number? %)
+               'procedure?      #(apply fn? %)
+               'symbol?         #(apply string? %)
+               'equal?          #(apply = %)
+               'list            identity
+               'car             #(apply first %)
+               'cdr             #(apply next %)
+               'cons            (fn [a] (apply #(cons %1 %2) a))
+               'apply           #(apply %1 %&)
+               'map             (fn [[f & bdy]] (map f (map vector (first bdy))))
+               'pi              3.141592653589793
+               (symbol "true")  true
+               (symbol "false") false}})
 
-(def macros (atom {}))
 
-(defn env-find [sym env] (when-let [cur (@envs env)] (if-let [vl (cur sym)] vl (env-find sym (@parent env)))))
+
+(defn env-find [sym env] (when-let [cur (envs env)] (if-let [vl (cur sym)] vl (env-find sym (parent env)))))
 
 (defn atomize [el]
   (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (symbol el))))))
@@ -46,18 +47,18 @@
   (cond
     ((some-fn number? boolean? fn? nil?) exp) exp
     (symbol? exp) (env-find exp env)
-    (some #(= (get exp 0) %) ['set! 'define]) (swap! envs assoc-in [env (exp 1)] (evaluate (exp 2) env))
+    (some #(= (get exp 0) %) ['set! 'define]) (def envs (assoc-in envs [env (exp 1)] (evaluate (exp 2) env)))
     (= (get exp 0) 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) 'quote) (exp 1)
     (= (get exp 0) 'begin) (last (map #(evaluate % env) (subvec exp 1)))
     (= (get exp 0) 'lambda) (fn [args] (let [cur-env (keyword (gensym))]
-                                         (swap! parent assoc cur-env env)
-                                         (swap! envs assoc cur-env (zipmap (exp 1) args))
+                                         (def parent (assoc parent cur-env env))
+                                         (def envs (assoc envs cur-env (zipmap (exp 1) args)))
                                          (evaluate (exp 2) cur-env)))
-    (= (get exp 0) 'defn-macro) (swap! macros assoc (exp 1) (evaluate (exp 2) env))
+    (= (get exp 0) 'defn-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
+    (fn? (macros (get exp 0))) (evaluate (vec ((macros (get exp 0)) (subvec exp 1))) env)
     (fn? (env-find (get exp 0) env)) ((env-find (get exp 0) env) (map #(evaluate % env) (subvec exp 1)))
     (fn? (get exp 0)) ((get exp 0) (map #(evaluate % env) (subvec exp 1)))
-    (fn? (@macros (get exp 0))) (evaluate (vec ((@macros (get exp 0)) (subvec exp 1))) env)
     :else (if (coll? exp) exp (throw-error))))
 
 (defn parse [s eval?]
