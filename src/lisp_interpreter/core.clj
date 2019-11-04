@@ -44,9 +44,9 @@
 
 (defn evaluate [exp env]
   (cond
-    ((some-fn number? boolean? fn?) exp) exp
+    ((some-fn number? boolean? fn? nil?) exp) exp
     (symbol? exp) (env-find exp env)
-    (some #(= (get exp 0) %) ['set! 'define]) (do (swap! envs assoc-in [env (exp 1)] (evaluate (exp 2) env)))
+    (some #(= (get exp 0) %) ['set! 'define]) (swap! envs assoc-in [env (exp 1)] (evaluate (exp 2) env))
     (= (get exp 0) 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) 'quote) (exp 1)
     (= (get exp 0) 'begin) (last (map #(evaluate % env) (subvec exp 1)))
@@ -54,9 +54,10 @@
                                          (swap! parent assoc cur-env env)
                                          (swap! envs assoc cur-env (zipmap (exp 1) args))
                                          (evaluate (exp 2) cur-env)))
-    (= (get exp 0) 'defn-macro) (swap! macros assoc (exp 1) {"args" (exp 2) "body" (exp 3)})
+    (= (get exp 0) 'defn-macro) (swap! macros assoc (exp 1) (evaluate (exp 2) env))
     (fn? (env-find (get exp 0) env)) ((env-find (get exp 0) env) (map #(evaluate % env) (subvec exp 1)))
     (fn? (get exp 0)) ((get exp 0) (map #(evaluate % env) (subvec exp 1)))
+    (fn? (@macros (get exp 0))) (evaluate (vec ((@macros (get exp 0)) (subvec exp 1))) env)
     :else (if (coll? exp) exp (throw-error))))
 
 (defn parse [s eval?]
@@ -76,5 +77,3 @@
   (do (printf "\033[0;1mcljisp ~ \u03BB  \033[34;1m") (flush)
       (let [[res rmn] (interpret (read-line))]
         (if (empty? rmn) (do (printf "%s\n" (pr-str res)) (-main)) (throw-error)))))
-
-;; issues true not parsing properly in if
