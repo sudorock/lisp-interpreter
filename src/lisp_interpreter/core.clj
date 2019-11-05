@@ -26,7 +26,7 @@
                'procedure?      #(apply fn? %)
                'symbol?         #(apply string? %)
                'equal?          #(apply = %)
-               'list            identity
+               'list            vec
                'car             #(apply first %)
                'cdr             #(apply next %)
                'cons            (fn [a] (apply #(cons %1 %2) a))
@@ -35,8 +35,6 @@
                'pi              3.141592653589793
                (symbol "true")  true
                (symbol "false") false}})
-
-
 
 (defn env-find [sym env] (when-let [cur (envs env)] (if-let [vl (cur sym)] vl (env-find sym (parent env)))))
 
@@ -55,8 +53,8 @@
                                          (def parent (assoc parent cur-env env))
                                          (def envs (assoc envs cur-env (zipmap (exp 1) args)))
                                          (evaluate (exp 2) cur-env)))
-    (= (get exp 0) 'defn-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
-    (fn? (macros (get exp 0))) (evaluate (vec ((macros (get exp 0)) (subvec exp 1))) env)
+    (= (get exp 0) 'define-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
+    (fn? (macros (get exp 0))) (evaluate ((macros (get exp 0)) (subvec exp 1)) env)
     (fn? (env-find (get exp 0) env)) ((env-find (get exp 0) env) (map #(evaluate % env) (subvec exp 1)))
     (fn? (get exp 0)) ((get exp 0) (map #(evaluate % env) (subvec exp 1)))
     :else (if (coll? exp) exp (throw-error))))
@@ -64,7 +62,7 @@
 (defn parse [s eval?]
   (cond
     (re-find #"^\)" s) (throw-error)
-    (and eval? (re-find #"^\(\s*(?:lambda|quote|defn-macro)\s+" s)) (let [[res rmn] (parse s false)] [(evaluate res :g) (trim rmn)])
+    (and eval? (re-find #"^\(\s*(?:lambda|quote|define-macro)\s+" s)) (let [[res rmn] (parse s false)] [(evaluate res :g) (trim rmn)])
     (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
                          (cond
                            (empty? rst) (throw-error)
@@ -78,3 +76,8 @@
   (do (printf "\033[0;1mcljisp ~ \u03BB  \033[34;1m") (flush)
       (let [[res rmn] (interpret (read-line))]
         (if (empty? rmn) (do (printf "%s\n" (pr-str res)) (-main)) (throw-error)))))
+
+
+
+
+;"(define-macro when (lambda (cnd then) (list (quote if) cnd then nil)))"
