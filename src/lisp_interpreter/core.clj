@@ -41,6 +41,19 @@
 (defn atomize [el]
   (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (symbol el))))))
 
+(defn get-arg-map [params args]
+  (loop [[fst-a & rst-a] args, [fst-p & rst-p] params, result {}]
+    (cond
+      (nil? fst-p) result
+      (= fst-p '.) (conj result (hash-map (first rst-p) rst-a))
+      :else (recur rst-a rst-p (conj result (hash-map fst-p fst-a))))))
+
+(defn handle-lambda [exp env]
+  (fn [args] (let [cur-env (keyword (gensym)) arg-map (get-arg-map (exp 1) args)]
+               (def parent (assoc parent cur-env env))
+               (def envs (assoc envs cur-env arg-map))
+               (evaluate (exp 2) cur-env))))
+
 (defn evaluate [exp env]
   (cond
     ((some-fn number? boolean? fn? nil?) exp) exp
@@ -49,10 +62,7 @@
     (= (get exp 0) 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) 'quote) (exp 1)
     (= (get exp 0) 'begin) (last (map #(evaluate % env) (subvec exp 1)))
-    (= (get exp 0) 'lambda) (fn [args] (let [cur-env (keyword (gensym))]
-                                         (def parent (assoc parent cur-env env))
-                                         (def envs (assoc envs cur-env (zipmap (exp 1) args)))
-                                         (evaluate (exp 2) cur-env)))
+    (= (get exp 0) 'lambda) (handle-lambda exp env)
     (= (get exp 0) 'define-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
     (fn? (macros (get exp 0))) (evaluate ((macros (get exp 0)) (subvec exp 1)) env)
     (fn? (env-find (get exp 0) env)) ((env-find (get exp 0) env) (map #(evaluate % env) (subvec exp 1)))
@@ -81,3 +91,4 @@
 
 
 ;"(define-macro when (lambda (cnd then) (list (quote if) cnd then nil)))"
+;"(define-macro when (lambda (cnd . then) (list (quote if) cnd then nil)))"
