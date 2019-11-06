@@ -56,6 +56,15 @@
                (def envs (assoc envs cur-env arg-map))
                (evaluate (exp 2) cur-env))))
 
+(defn is-pair [exp] (and (vector? exp) (not-empty exp)))
+(defn handle-quasi [exp]
+  (if (is-pair exp)
+    (cond
+      (= (exp 0) 'unquote) (exp 1)
+      (and (is-pair (exp 0)) (= ((get exp 0) 0) 'unquote-splice)) ['concat ((get exp 0) 1) (handle-quasi (subvec exp 1))]
+      :else ['cons (handle-quasi (exp 0)) (handle-quasi (subvec exp 1))])
+    ['quote exp]))
+
 (defn evaluate [exp env]
   (cond
     ((some-fn number? boolean? fn? nil? #(contains? #{'if 'begin 'lambda 'define} %)) exp) exp
@@ -63,6 +72,7 @@
     (some #(= (get exp 0) %) ['set! 'define]) (def envs (assoc-in envs [env (exp 1)] (evaluate (exp 2) env)))
     (= (get exp 0) 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
     (= (get exp 0) 'quote) (exp 1)
+    (= (get exp 0) 'quasi-quote) (evaluate (handle-quasi (exp 1)) env)
     (= (get exp 0) 'begin) (last (map #(evaluate % env) (subvec exp 1)))
     (= (get exp 0) 'lambda) (handle-lambda exp env)
     (= (get exp 0) 'define-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
@@ -74,7 +84,7 @@
 (defn parse [s eval?]
   (cond
     (re-find #"^\)" s) (throw-error)
-    (and eval? (re-find #"^\(\s*(?:lambda|quote|define-macro)\s+" s)) (let [[res rmn] (parse s false)] [(evaluate res :g) (trim rmn)])
+    (and eval? (re-find #"^\(\s*(?:lambda|quote|quasi-quote|define-macro)\s+" s)) (let [[res rmn] (parse s false)] [(evaluate res :g) (trim rmn)])
     (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
                          (cond
                            (empty? rst) (throw-error)
@@ -101,3 +111,5 @@
 ;(define-macro unless (lambda (cnd . branch) (list (quote if) (list (quote not) cnd) (cons (quote begin) branch))))
 
 ;(define-macro my-or (lambda (x y) `(if ,x ,x ,y)))
+
+;(define-macro my-or (lambda (x y) (quasi-quote (if (unquote x) (unquote x) (unquote y)))))
