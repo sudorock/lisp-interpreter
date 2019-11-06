@@ -29,9 +29,11 @@
                'list            vec
                'car             #(apply first %)
                'cdr             #(apply next %)
-               'cons            (fn [a] (apply #(cons %1 %2) a))
+               'cons            (fn [a] (vec (apply #(cons %1 %2) a)))
+               'concat          #(vec (apply concat %))
                'apply           #(apply %1 %&)
                'map             (fn [[f & bdy]] (map f (map vector (first bdy))))
+               'print           #(apply prn %)
                'pi              3.141592653589793
                (symbol "true")  true
                (symbol "false") false}})
@@ -42,11 +44,11 @@
   (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (symbol el))))))
 
 (defn get-arg-map [params args]
-  (loop [[fst-a & rst-a] args, [fst-p & rst-p] params, result {}]
+  (loop [rst-p params, rst-a args, result {}]
     (cond
-      (nil? fst-p) result
-      (= fst-p '.) (conj result (hash-map (first rst-p) rst-a))
-      :else (recur rst-a rst-p (conj result (hash-map fst-p fst-a))))))
+      (empty? rst-p) result
+      (= (first rst-p) '.) (conj result (hash-map (second rst-p) (vec rst-a)))
+      :else (recur (rest rst-p) (rest rst-a) (conj result (hash-map (first rst-p) (first rst-a)))))))
 
 (defn handle-lambda [exp env]
   (fn [args] (let [cur-env (keyword (gensym)) arg-map (get-arg-map (exp 1) args)]
@@ -56,7 +58,7 @@
 
 (defn evaluate [exp env]
   (cond
-    ((some-fn number? boolean? fn? nil?) exp) exp
+    ((some-fn number? boolean? fn? nil? #(contains? #{'if 'begin 'lambda 'define} %)) exp) exp
     (symbol? exp) (env-find exp env)
     (some #(= (get exp 0) %) ['set! 'define]) (def envs (assoc-in envs [env (exp 1)] (evaluate (exp 2) env)))
     (= (get exp 0) 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (exp 3) env))
@@ -88,7 +90,14 @@
         (if (empty? rmn) (do (printf "%s\n" (pr-str res)) (-main)) (throw-error)))))
 
 
-
-
 ;"(define-macro when (lambda (cnd then) (list (quote if) cnd then nil)))"
 ;"(define-macro when (lambda (cnd . then) (list (quote if) cnd then nil)))"
+;"(define-macro when (lambda (cnd . then) (list (quote if) cnd (cons (quote begin) then)  nil)))"
+
+
+;(define z (lambda (k l . els) (print k l els)))
+
+
+;(define-macro unless (lambda (cnd . branch) (list (quote if) (list (quote not) cnd) (cons (quote begin) branch))))
+
+;(define-macro my-or (lambda (x y) `(if ,x ,x ,y)))
