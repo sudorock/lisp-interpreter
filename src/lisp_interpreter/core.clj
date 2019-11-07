@@ -95,10 +95,12 @@
 
 ;; Interpreter and REPL
 (defn interpret [s] (reader (trim s) true))
-(defn -main []
+
+(defn repl []
   (do (printf "\033[0;1mcljisp ~ \u03BB  \033[34;1m") (flush)
       (let [[res rmn] (interpret (read-line))]
-        (if (empty? rmn) (do (printf "%s\n" (pr-str res)) (-main)) (throw-error)))))
+        (if (empty? rmn) (do (printf "%s\n" (pr-str res)) (repl)) (throw-error)))))
+(defn -main [] (repl))
 
 
 ;"(define-macro when (lambda (cnd then) (list (quote if) cnd then nil)))"
