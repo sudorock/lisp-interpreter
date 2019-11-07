@@ -94,6 +94,12 @@
                            (empty? rst) (throw-error "EOF while reading")
                            (re-find #"^\)" rst) [exp (trim (replace-first rst #"^\)" ""))]
                            :else (when-let [[res rmn] (reader rst)] (recur (trim rmn) (conj exp res)))))
+    (re-find #"^['`~]\S+" s) (cond
+                               (re-find #"^'\S+" s) (let [[res rmn] (reader (subs s 1))] [['quote res] rmn])
+                               (re-find #"^`\S+" s) (let [[res rmn] (reader (subs s 1))] [['q-quote res] rmn])
+                               (re-find #"^~@\S+" s) (let [[res rmn] (reader (subs s 2))] [['unqt-splice res] rmn])
+                               (re-find #"^~\S+" s) (let [[res rmn] (reader (subs s 1))] [['unqt res] rmn])
+                               :else (throw-error "Unidenitified symbol"))
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 ;; Interpreter and REPL
@@ -118,7 +124,7 @@
 
 
 
-
+;"(def-macro when (lambda (k . l) `(if ~k (begin ~@l))))"
 
 
 
