@@ -1,7 +1,7 @@
 (ns lisp-interpreter.core
   (:require [clojure.string :refer [split trim replace-first join escape]]
             [lisp-interpreter.cond-let :refer [cond-let]]))
-(declare evaluate -main)
+(declare evaluate reader -main)
 
 (defn throw-error [s] (.println *err* (format "ERROR: %s" s)))
 
@@ -51,7 +51,7 @@
 
 (defn evaluate
   ([exp] (evaluate exp :g))
-  ([exp env] (if-let [op (and (vector? exp) (if (vector? (get exp 0)) (evaluate (get exp 0) :g) (get exp 0)) )]
+  ([exp env] (if-let [op (and (vector? exp) (if (vector? (get exp 0)) (evaluate (get exp 0) env) (get exp 0)) )]
                (cond-let
                  (some #(= op %) ['set! 'define]) (def envs (assoc-in envs [env (exp 1)] (evaluate (exp 2) env)))
                  (= op 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (get exp 3) env))
@@ -68,20 +68,23 @@
                  ((some-fn number? boolean? fn? nil? string?) exp) exp
                  :else (throw-error (format "Unable to resolve symbol: %s" exp))))))
 
-(defn reader [s]
+(defn reader-macro [s]
   (cond
+    (re-find #"^'\S+" s) (let [[res rmn] (reader (subs s 1))] [['quote res] rmn])
+    (re-find #"^`\S+" s) (let [[res rmn] (reader (subs s 1))] [['q-quote res] rmn])
+    (re-find #"^~@\S+" s) (let [[res rmn] (reader (subs s 2))] [['unqt-splice res] rmn])
+    (re-find #"^~\S+" s) (let [[res rmn] (reader (subs s 1))] [['unqt res] rmn])
+    :else nil))
+
+(defn reader [s]
+  (cond-let
     (re-find #"^\)" s) (throw-error "Unmatched delimiter")
     (re-find #"^\(" s) (loop [rst (trim (replace-first s #"^\(" "")), exp []]
                          (cond
                            (empty? rst) (throw-error "EOF while reading")
                            (re-find #"^\)" rst) [exp (trim (replace-first rst #"^\)" ""))]
                            :else (when-let [[res rmn] (reader rst)] (recur (trim rmn) (conj exp res)))))
-    (re-find #"^['`~]@?\S+" s) (cond
-                               (re-find #"^'\S+" s) (let [[res rmn] (reader (subs s 1))] [['quote res] rmn])
-                               (re-find #"^`\S+" s) (let [[res rmn] (reader (subs s 1))] [['q-quote res] rmn])
-                               (re-find #"^~@\S+" s) (let [[res rmn] (reader (subs s 2))] [['unqt-splice res] rmn])
-                               (re-find #"^~\S+" s) (let [[res rmn] (reader (subs s 1))] [['unqt res] rmn])
-                               :else (throw-error "Unidenitified symbol"))
+    [expanded (reader-macro s)] expanded
     :else (if-let [res (re-find #"^\S*[^\(\)\s]+" s)] [(atomize (trim res)) (trim (subs s (count res)))] s)))
 
 ;; Interpreter and REPL
@@ -102,9 +105,6 @@
 
 
 ;"(def-macro when (lambda (k . l) (q-quote (if (unqt k) (begin (unqt-splice l)) ))))"
-
-
-
 
 ;"(def-macro when (lambda (k . l) `(if ~k (begin ~@l))))"
 
