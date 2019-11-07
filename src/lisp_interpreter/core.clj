@@ -41,7 +41,9 @@
 (defn env-find [sym env] (when-let [cur (envs env)] (if-let [vl (cur sym)] vl (env-find sym (parent env)))))
 
 (defn atomize [el]
-  (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (symbol el))))))
+  (if (re-find #"^\".*\"$" el)
+    (clojure.string/replace el #"^\"|\"$" "")
+    (try (Integer/parseInt el) (catch Exception e (try (Double/parseDouble el) (catch Exception e (symbol el)))))))
 
 (defn get-arg-map [params args]
   (loop [rst-p params, rst-a args, result {}]
@@ -67,7 +69,7 @@
 
 (defn evaluate
   ([exp] (evaluate exp :g))
-  ([exp env] (if-let [op (if (vector? (get exp 0)) (evaluate (get exp 0) :g) (get exp 0))]
+  ([exp env] (if-let [op (and (vector? exp) (if (vector? (get exp 0)) (evaluate (get exp 0) :g) (get exp 0)) )]
                (cond
                  (some #(= op %) ['set! 'define]) (def envs (assoc-in envs [env (exp 1)] (evaluate (exp 2) env)))
                  (= op 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (get exp 3) env))
@@ -82,7 +84,7 @@
                  :else (throw-error "Invalid Expression"))
                (if-let [value (env-find exp env)]
                  value
-                 (if ((some-fn number? boolean? fn? nil?) exp)
+                 (if ((some-fn number? boolean? fn? nil? string?) exp)
                    exp
                    (format "Unable to resolve symbol: %s" exp))))))
 
