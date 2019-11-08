@@ -1,4 +1,4 @@
-(ns lisp-interpreter.cond-let)
+(ns lisp-interpreter.helper-macros)
 
 (defmacro cond-let
   ([] nil)
