@@ -41,8 +41,8 @@
   (letfn [(is-pair? [exp] (and (vector? exp) (not-empty exp)))]
     (if (is-pair? exp)
       (cond
-        (= (exp 0) 'unqt) (exp 1)
-        (and (is-pair? (exp 0)) (= ((get exp 0) 0) 'unqt-splice)) ['concat ((get exp 0) 1) (handle-quasi (subvec exp 1))]
+        (= (exp 0) 'unquote) (exp 1)
+        (and (is-pair? (exp 0)) (= ((get exp 0) 0) 'unquote-splice)) ['concat ((get exp 0) 1) (handle-quasi (subvec exp 1))]
         :else ['cons (handle-quasi (exp 0)) (handle-quasi (subvec exp 1))])
       ['quote exp])))
 
@@ -54,8 +54,8 @@
                  (= op 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (get exp 3) env))
                  (= op 'quote) (exp 1)
                  (= op 'q-quote) (evaluate (handle-quasi (exp 1)) env)
-                 (= op 'begin) (last (map #(evaluate % env) (subvec exp 1)))
-                 (= op 'lambda) (handle-lambda exp env)
+                 (= op 'do) (last (map #(evaluate % env) (subvec exp 1)))
+                 (= op 'fn) (handle-lambda exp env)
                  (= op 'def-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
                  [m (macros op)] (evaluate (m (subvec exp 1)) env)
                  [f (some #(and (fn? %) (identity %)) [op (env-find op env)])] (f (map #(evaluate % env) (subvec exp 1)))
@@ -69,8 +69,8 @@
   (cond
     (re-find #"^'\S+" s) (let [[res rmn] (reader (subs s 1))] [['quote res] rmn])
     (re-find #"^`\S+" s) (let [[res rmn] (reader (subs s 1))] [['q-quote res] rmn])
-    (re-find #"^~@\S+" s) (let [[res rmn] (reader (subs s 2))] [['unqt-splice res] rmn])
-    (re-find #"^~\S+" s) (let [[res rmn] (reader (subs s 1))] [['unqt res] rmn])
+    (re-find #"^~@\S+" s) (let [[res rmn] (reader (subs s 2))] [['unquote-splice res] rmn])
+    (re-find #"^~\S+" s) (let [[res rmn] (reader (subs s 1))] [['unquote res] rmn])
     :else nil))
 
 (defn reader [s]
@@ -99,4 +99,4 @@
 
 ;"(def-macro when (lambda (k . l) (q-quote (if (unqt k) (begin (unqt-splice l)) ))))"
 
-;"(def-macro when (lambda (k . l) `(if ~k (begin ~@l))))"
+;"(def-macro when (fn (k . l) `(if ~k (do ~@l))))"
