@@ -8,13 +8,13 @@
 
 (def parent {})
 (def macros {})
-(def envs {:g {'+ #(apply +' %) '- #(apply -' %) '* #(apply *' %) '/ #(apply / %) '>  #(apply > %) '<  #(apply < %)
-               '>= #(apply >= %) '<= #(apply <= %) '=  #(apply = %) 'not  #(apply not %) 'max  #(apply max %)
-               'min  #(apply min %) 'sqrt (fn [a] (apply #(Math/sqrt %) a)) 'expt (fn [a] (apply #(Math/pow %1 %2) a))
+(def envs {:g {'+ #(apply +' %) '- #(apply -' %) '* #(apply *' %) '/ #(apply / %) '> #(apply > %) '< #(apply < %)
+               '>= #(apply >= %) '<= #(apply <= %) '= #(apply = %) 'not #(apply not %) 'max #(apply max %)
+               'min #(apply min %) 'sqrt (fn [a] (apply #(Math/sqrt %) a)) 'expt (fn [a] (apply #(Math/pow %1 %2) a))
                'round (fn [a] (apply #(Math/round %) a)) 'abs (fn [a] (apply #(max % (- %)) a)) 'number? #(apply number? %)
-               'procedure? #(apply fn? %) 'symbol?  #(apply string? %) 'equal? #(apply = %) 'list vec 'car #(apply first %)
-               'cdr #(apply next %) 'cons (fn [a] (vec (apply #(cons %1 %2) a))) 'concat  #(vec (apply concat %))
-               'apply  #(apply %1 %&) 'map (fn [[f & bdy]] (map f (map vector (first bdy))))'print  #(apply prn %)
+               'procedure? #(apply fn? %) 'symbol? #(apply string? %) 'equal? #(apply = %) 'list vec 'car #(apply first %)
+               'cdr #(apply next %) 'cons (fn [a] (vec (apply #(cons %1 %2) a))) 'concat #(vec (apply concat %))
+               'apply #(apply (%1 0) (%1 1)) 'map (fn [[f & bdy]] (map f (map vector (first bdy)))) 'print #(apply prn %)
                'pi 3.141592653589793 (symbol "true") true (symbol "false") false}})
 
 (defn env-find [sym env] (when-let [cur (envs env)] (if-let [vl (cur sym)] vl (env-find sym (parent env)))))
@@ -46,19 +46,30 @@
         :else ['cons (handle-quasi (exp 0)) (handle-quasi (subvec exp 1))])
       ['quote exp])))
 
+(defn handle-let [exp env]
+  (loop [bindings (exp 1) c-env env]
+    (let [vr (first bindings) bnd (second bindings)]
+      (if (and (nil? vr) (nil? bnd))
+        (evaluate (exp 2) c-env)
+        (let [cur-env (keyword (gensym)) arg-map (hash-map vr (evaluate bnd c-env))]
+          (def parent (assoc parent cur-env c-env))
+          (def envs (assoc envs cur-env arg-map))
+          (recur (subvec bindings 2) cur-env))))))
+
 (defn evaluate
   ([exp] (evaluate exp :g))
-  ([exp env] (if-let [op (and (vector? exp) (if (vector? (get exp 0)) (evaluate (get exp 0) env) (get exp 0)) )]
+  ([exp env] (if-let [op (and (vector? exp) (if (vector? (get exp 0)) (evaluate (get exp 0) env) (get exp 0)))]
                (cond-let
-                 (some #(= op %) ['set! 'define]) (def envs (assoc-in envs [env (exp 1)] (evaluate (exp 2) env)))
+                 (some #(= op %) ['set! 'define]) (def envs (assoc-in envs [:g (exp 1)] (evaluate (exp 2) env)))
                  (= op 'if) (if (evaluate (exp 1) env) (evaluate (exp 2) env) (evaluate (get exp 3) env))
                  (= op 'quote) (exp 1)
                  (= op 'q-quote) (evaluate (handle-quasi (exp 1)) env)
-                 (= op 'do) (last (map #(evaluate % env) (subvec exp 1)))
+                 (= op 'do) (last (mapv #(evaluate % env) (subvec exp 1)))
                  (= op 'fn) (handle-lambda exp env)
+                 (= op 'let) (handle-let exp env)
                  (= op 'def-macro) (def macros (assoc macros (exp 1) (evaluate (exp 2) env)))
                  [m (macros op)] (evaluate (m (subvec exp 1)) env)
-                 [f (some #(and (fn? %) (identity %)) [op (env-find op env)])] (f (map #(evaluate % env) (subvec exp 1)))
+                 [f (some #(and (fn? %) (identity %)) [op (env-find op env)])] (f (mapv #(evaluate % env) (subvec exp 1)))
                  :else (throw-error "Invalid form"))
                (cond-let
                  [value (env-find exp env)] value
@@ -91,12 +102,12 @@
       (evaluate ast :g)
       (throw-error "Unmatched delimiter"))))
 
+
 (defn repl []
   (do (printf "\033[0;1mcljisp ~ \u03BB  \033[34;1m") (flush)
       (let [res (interpret (read-line))] (printf "%s\n" (pr-str res)) (flush) (repl))))
 
 (defn -main [] (repl))
 
-;"(def-macro when (lambda (k . l) (q-quote (if (unqt k) (begin (unqt-splice l)) ))))"
 
 ;"(def-macro when (fn (k . l) `(if ~k (do ~@l))))"
