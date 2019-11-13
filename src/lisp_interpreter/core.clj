@@ -47,14 +47,13 @@
       ['quote exp])))
 
 (defn handle-let [exp env]
-  (loop [bindings (exp 1) c-env env]
-    (let [vr (first bindings) bnd (second bindings)]
-      (if (and (nil? vr) (nil? bnd))
-        (evaluate (exp 2) c-env)
-        (let [cur-env (keyword (gensym)) arg-map (hash-map vr (evaluate bnd c-env))]
-          (def parent (assoc parent cur-env c-env))
-          (def envs (assoc envs cur-env arg-map))
-          (recur (subvec bindings 2) cur-env))))))
+  (loop [bnd (exp 1) c-env env]
+    (if (and (nil? (first bnd)) (nil? (second bnd)))
+      (evaluate (exp 2) c-env)
+      (let [cur-env (keyword (gensym)) arg-map (hash-map (first bnd) (evaluate (second bnd) c-env))]
+        (def parent (assoc parent cur-env c-env))
+        (def envs (assoc envs cur-env arg-map))
+        (recur (subvec bnd 2) cur-env)))))
 
 (defn evaluate
   ([exp] (evaluate exp :g))
