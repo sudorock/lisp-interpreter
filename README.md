@@ -1,7 +1,7 @@
 # lisp-interpreter
 A Lisp interpreter written in Clojure.
 
-## Features: 
+## Features
 - Core functions: arithmetic operations, list, car, cdr, cons, concat, map, apply, print and more.
 - Special forms: if, quote, quasi-quote, do, fn (lambda), let, defmacro, define, set!
 - REPL
@@ -10,6 +10,10 @@ A Lisp interpreter written in Clojure.
 - Macros
 - Reader macros: ``` ' ```,``` ` ``` ,``` ~ ```,``` ~@ ```
 
+## Usage
+
+1. Uncomment line number 6 and comment line 7 in ```src/lisp_interpreter/core.clj``` if you want to run the REPL.
+2. Run the app using ```lein run``` in your terminal from the root directory of the project.
 
 ## License
 
