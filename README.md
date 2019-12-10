@@ -4,11 +4,11 @@ A Lisp interpreter written in Clojure.
 ## Features
 - Core functions: arithmetic operations, list, car, cdr, cons, concat, map, apply, print and more.
 - Special forms: if, quote, quasi-quote, do, fn (lambda), let, defmacro, define, set!
-- REPL
 - Lexical scoping
 - Lambda functions
 - Macros
 - Reader macros: ``` ' ```,``` ` ``` ,``` ~ ```,``` ~@ ```
+- REPL
 
 ## Usage
 
